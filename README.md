@@ -39,7 +39,7 @@ docker compose up --build -d
 Once running:
 - **API Base URL**: `http://localhost:5000`
 - **Health Check**: `http://localhost:5000/health`
-- **PostgreSQL**: `localhost:5432` (database: `urlshortener`, user: `postgres`, password: `postgres`)
+- **PostgreSQL**: `localhost:5433` (database: `urlshortener`, user: `postgres`, password: `postgres`)
 
 To stop the containers and remove volumes:
 ```bash

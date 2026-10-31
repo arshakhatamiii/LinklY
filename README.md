@@ -37,8 +37,8 @@ docker compose up --build -d
 ```
 
 Once running:
-- **API Base URL**: `http://localhost:5000`
-- **Health Check**: `http://localhost:5000/health`
+- **API Base URL**: `http://localhost:5100`
+- **Health Check**: `http://localhost:5100/health`
 - **PostgreSQL**: `localhost:5433` (database: `urlshortener`, user: `postgres`, password: `postgres`)
 
 To stop the containers and remove volumes:
@@ -67,7 +67,7 @@ Creates a new short URL code for a valid HTTP or HTTPS destination.
     ```json
     {
       "code": "4c92",
-      "shortUrl": "http://localhost:5000/4c92",
+      "shortUrl": "http://localhost:5100/4c92",
       "originalUrl": "https://github.com/dotnet/aspnetcore",
       "createdAtUtc": "2026-10-31T20:15:00Z"
     }
@@ -87,7 +87,7 @@ Creates a new short URL code for a valid HTTP or HTTPS destination.
 ### 2. Redirect to Original Link
 Redirects visitors to the target destination.
 
-- **URL**: `GET /{code}` (e.g. `GET http://localhost:5000/4c92`)
+- **URL**: `GET /{code}` (e.g. `GET http://localhost:5100/4c92`)
 - **Success Response**: `302 Found` with `Location: <OriginalUrl>`
 - **Error Response** (`404 Not Found`):
   ```json

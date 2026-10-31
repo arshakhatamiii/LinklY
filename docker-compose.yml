@@ -31,7 +31,7 @@ services:
       ConnectionStrings__Database: Host=postgres;Port=5432;Database=urlshortener;Username=postgres;Password=postgres
       ASPNETCORE_ENVIRONMENT: Development
     ports:
-      - "5000:8080"
+      - "5100:8080"
 
 volumes:
   postgres_data:

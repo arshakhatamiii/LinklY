@@ -1,0 +1,26 @@
+## .NET Core
+[Bb]in/
+[Oo]bj/
+[Ll]og/
+[Ll]ogs/
+*.user
+*.userosscache
+*.suo
+*.userprefs
+appsettings.Development.json
+
+## Visual Studio / Rider / VS Code
+.vs/
+.idea/
+.vscode/
+*.DotSettings.user
+
+## OS Files
+.DS_Store
+Thumbs.db
+
+## Test Results & Artifacts
+TestResults/
+*.trx
+*.coverage
+*.opencover.xml

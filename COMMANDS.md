@@ -148,9 +148,17 @@ dotnet ef migrations remove \
 
 ---
 
-## ۵. اجرای آزمون بار مبنا با k6 (Load Testing)
+## ۵. اجرای آزمون بار و کارایی با k6 (Load Testing)
 
-### در سیستم‌عامل‌های macOS و Windows:
+ابزار **k6** مستقیماً روی سیستم مک شما نصب است (`/opt/homebrew/bin/k6`) و همچنین می‌توانید آن را از طریق داکر اجرا کنید.
+
+### الف) اجرای مستقیم در ترمینال مک (ساده‌ترین روش):
+```bash
+# اجرای سناریوی استاندارد اسکریپت (۵۰ کاربر، ۳۰ ثانیه):
+k6 run loadtest/redirect.js
+```
+
+### ب) اجرای با داکر (بدون وابستگی به سیستم‌عامل):
 ```bash
 docker run --rm -i \
   -v $(pwd)/loadtest:/loadtest \
@@ -158,13 +166,36 @@ docker run --rm -i \
   grafana/k6 run /loadtest/redirect.js
 ```
 
-### در سیستم‌عامل لینوکس:
+### ج) دستورات و فلگ‌های کاربردی k6 برای سناریوهای مختلف:
+
+#### ۱. تست سریع عملکردی (Smoke Test - یک کاربر برای ۵ ثانیه):
 ```bash
-docker run --rm -i \
-  --network=host \
-  -v $(pwd)/loadtest:/loadtest \
-  -e BASE_URL=http://localhost:5100 \
-  grafana/k6 run /loadtest/redirect.js
+k6 run --vus 1 --duration 5s loadtest/redirect.js
+```
+
+#### ۲. تغییر تعداد کاربران همزمان (مثلاً ۱۰۰ کاربر):
+```bash
+k6 run --vus 100 --duration 20s loadtest/redirect.js
+```
+
+#### ۳. تست استرس سنگین (مثلاً ۲۰۰ کاربر برای ۱ دقیقه):
+```bash
+k6 run --vus 200 --duration 1m loadtest/redirect.js
+```
+
+#### ۴. تغییر آدرس سرور هدف (مثلاً سرور استیجینگ یا پورت دیگر):
+```bash
+k6 run -e BASE_URL=http://localhost:5100 loadtest/redirect.js
+```
+
+#### ۵. ذخیره گزارش نهایی در یک فایل JSON:
+```bash
+k6 run --summary-export=loadtest/results.json loadtest/redirect.js
+```
+
+#### ۶. اجرای بدون لاگ‌های اضافی (حالت بی‌صدا):
+```bash
+k6 run -q loadtest/redirect.js
 ```
 
 ---

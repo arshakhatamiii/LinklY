@@ -58,27 +58,40 @@ Creates a new short URL code for a valid HTTP or HTTPS destination.
 - **Request Body**:
   ```json
   {
-    "url": "https://github.com/dotnet/aspnetcore"
+    "url": "https://github.com/dotnet/aspnetcore",
+    "alias": "aspnet-repo",
+    "expiresAt": "2026-12-31T23:59:59Z"
   }
   ```
+  *(Both `alias` and `expiresAt` are optional)*
 - **Success Response** (`201 Created`):
-  - **Header**: `Location: /4c92`
+  - **Header**: `Location: /aspnet-repo`
   - **Body**:
     ```json
     {
-      "code": "4c92",
-      "shortUrl": "http://localhost:5100/4c92",
+      "code": "aspnet-repo",
+      "shortUrl": "http://localhost:5100/aspnet-repo",
       "originalUrl": "https://github.com/dotnet/aspnetcore",
-      "createdAtUtc": "2026-10-31T20:15:00Z"
+      "createdAtUtc": "2026-11-01T10:00:00Z",
+      "expiresAtUtc": "2026-12-31T23:59:59Z"
     }
     ```
-- **Error Response** (`400 Bad Request`):
+- **Error Response — Invalid URL or Alias** (`400 Bad Request`):
   ```json
   {
     "type": "https://tools.ietf.org/html/rfc9110#section-15.5.1",
-    "title": "Invalid URL",
+    "title": "Invalid Alias",
     "status": 400,
-    "detail": "The provided URL is not a valid absolute HTTP or HTTPS URL."
+    "detail": "The alias can only contain alphanumeric characters, underscores, and hyphens."
+  }
+  ```
+- **Error Response — Alias Collision** (`409 Conflict`):
+  ```json
+  {
+    "type": "https://tools.ietf.org/html/rfc9110#section-15.5.10",
+    "title": "Alias already in use",
+    "status": 409,
+    "detail": "The alias 'aspnet-repo' is already in use."
   }
   ```
 
@@ -87,15 +100,24 @@ Creates a new short URL code for a valid HTTP or HTTPS destination.
 ### 2. Redirect to Original Link
 Redirects visitors to the target destination.
 
-- **URL**: `GET /{code}` (e.g. `GET http://localhost:5100/4c92`)
+- **URL**: `GET /{code}` (e.g. `GET http://localhost:5100/aspnet-repo`)
 - **Success Response**: `302 Found` with `Location: <OriginalUrl>`
-- **Error Response** (`404 Not Found`):
+- **Error Response — Not Found** (`404 Not Found`):
   ```json
   {
     "type": "https://tools.ietf.org/html/rfc9110#section-15.5.5",
     "title": "Link not found",
     "status": 404,
     "detail": "Short link with code 'nonexistent' was not found."
+  }
+  ```
+- **Error Response — Expired Link** (`410 Gone`):
+  ```json
+  {
+    "type": "https://tools.ietf.org/html/rfc9110#section-15.5.11",
+    "title": "Link expired",
+    "status": 410,
+    "detail": "Short link with code 'aspnet-repo' has expired."
   }
   ```
 
@@ -150,5 +172,6 @@ dotnet test
 
 ## Architectural Decisions
 
-Detailed rationale behind the code generation strategy (PostgreSQL Sequence + Base62 vs. Random String Generation) is documented in:
-- [ADR 0001: Short Code Generation Strategy](docs/adr/0001-code-generation.md)
+Detailed architectural decision records (ADRs) are documented in:
+- [ADR 0001: Short Code Generation Strategy](docs/adr/0001-code-generation.md) (Base62 vs. Random)
+- [ADR 0002: Custom Alias & Expiration Strategy](docs/adr/0002-alias-and-expiry.md) (Unique Index Concurrency, 410 Gone, TimeProvider)

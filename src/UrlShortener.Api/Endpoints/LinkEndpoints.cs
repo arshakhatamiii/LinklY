@@ -29,6 +29,11 @@ public static partial class LinkEndpoints
             .ProducesProblem(StatusCodes.Status404NotFound)
             .ProducesProblem(StatusCodes.Status410Gone);
 
+        group.MapGet("/api/links/{code}/stats", GetLinkStats)
+            .WithName("GetLinkStats")
+            .Produces<LinkStatsResponse>(StatusCodes.Status200OK)
+            .ProducesProblem(StatusCodes.Status404NotFound);
+
         return app;
     }
 
@@ -156,9 +161,11 @@ public static partial class LinkEndpoints
 
     public static async Task<IResult> RedirectToLink(
         string code,
+        HttpContext httpContext,
         ApplicationDbContext dbContext,
         ILinkCache linkCache,
         ISingleFlight singleFlight,
+        IClickTracker clickTracker,
         TimeProvider timeProvider,
         CancellationToken cancellationToken)
     {
@@ -169,6 +176,9 @@ public static partial class LinkEndpoints
                 title: "Link not found",
                 detail: $"Short link with code '{code}' was not found.");
         }
+
+        var referrer = httpContext.Request.Headers.Referer.ToString();
+        var userAgent = httpContext.Request.Headers.UserAgent.ToString();
 
         var cached = await linkCache.GetAsync(code, cancellationToken);
         if (cached is not null)
@@ -190,6 +200,7 @@ public static partial class LinkEndpoints
                     detail: $"Short link with code '{code}' has expired.");
             }
 
+            clickTracker.TrackClick(ClickEvent.Create(cached.Id, now, referrer, userAgent));
             return Results.Redirect(cached.Url!, permanent: false);
         }
 
@@ -202,7 +213,7 @@ public static partial class LinkEndpoints
             if (shortLink is null)
             {
                 await linkCache.SetNegativeAsync(code, TimeSpan.FromSeconds(60), cancellationToken);
-                return new CachedLink(null, null, IsNotFound: true);
+                return new CachedLink(0, null, null, IsNotFound: true);
             }
 
             var nowUtc = timeProvider.GetUtcNow().UtcDateTime;
@@ -218,10 +229,10 @@ public static partial class LinkEndpoints
 
             if (!shortLink.ExpiresAtUtc.HasValue || shortLink.ExpiresAtUtc.Value > nowUtc)
             {
-                await linkCache.SetAsync(shortLink.Code, shortLink.OriginalUrl, shortLink.ExpiresAtUtc, ttl, cancellationToken);
+                await linkCache.SetAsync(shortLink.Code, shortLink.Id, shortLink.OriginalUrl, shortLink.ExpiresAtUtc, ttl, cancellationToken);
             }
 
-            return new CachedLink(shortLink.OriginalUrl, shortLink.ExpiresAtUtc, IsNotFound: false);
+            return new CachedLink(shortLink.Id, shortLink.OriginalUrl, shortLink.ExpiresAtUtc, IsNotFound: false);
         });
 
         if (entry.IsNotFound)
@@ -241,9 +252,64 @@ public static partial class LinkEndpoints
                 detail: $"Short link with code '{code}' has expired.");
         }
 
+        clickTracker.TrackClick(ClickEvent.Create(entry.Id, nowUtcCheck, referrer, userAgent));
         return Results.Redirect(entry.Url!, permanent: false);
     }
+
+    public static async Task<IResult> GetLinkStats(
+        string code,
+        ApplicationDbContext dbContext,
+        TimeProvider timeProvider,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(code) || code.Length > 30)
+        {
+            return Results.Problem(
+                statusCode: StatusCodes.Status404NotFound,
+                title: "Link not found",
+                detail: $"Short link with code '{code}' was not found.");
+        }
+
+        var link = await dbContext.ShortLinks
+            .AsNoTracking()
+            .FirstOrDefaultAsync(x => x.Code == code, cancellationToken);
+
+        if (link is null)
+        {
+            return Results.Problem(
+                statusCode: StatusCodes.Status404NotFound,
+                title: "Link not found",
+                detail: $"Short link with code '{code}' was not found.");
+        }
+
+        var nowUtc = timeProvider.GetUtcNow().UtcDateTime;
+        var thirtyDaysAgo = nowUtc.AddDays(-30);
+
+        var totalClicks = await dbContext.ClickEvents
+            .Where(x => x.LinkId == link.Id)
+            .LongCountAsync(cancellationToken);
+
+        var rawDailyClicks = await dbContext.ClickEvents
+            .Where(x => x.LinkId == link.Id && x.ClickedAtUtc >= thirtyDaysAgo)
+            .GroupBy(x => x.ClickedAtUtc.Date)
+            .Select(g => new { Date = g.Key, Count = g.LongCount() })
+            .OrderBy(x => x.Date)
+            .ToListAsync(cancellationToken);
+
+        var clicksPerDay = rawDailyClicks
+            .Select(x => new DailyClickCount(DateOnly.FromDateTime(x.Date), x.Count))
+            .ToList();
+
+        return Results.Ok(new LinkStatsResponse(link.Code, totalClicks, clicksPerDay));
+    }
 }
+
+public record DailyClickCount(DateOnly Date, long Count);
+
+public record LinkStatsResponse(
+    string Code,
+    long TotalClicks,
+    IReadOnlyList<DailyClickCount> ClicksPerDay);
 
 public record CreateShortLinkRequest(string? Url, string? Alias = null, DateTime? ExpiresAt = null);
 

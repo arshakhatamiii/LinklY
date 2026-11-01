@@ -37,6 +37,10 @@ try
     builder.Services.AddSingleton<CacheMetrics>();
     builder.Services.AddSingleton<ISingleFlight, SingleFlight>();
 
+    builder.Services.AddSingleton<ClickAnalyticsChannel>();
+    builder.Services.AddSingleton<IClickTracker>(sp => sp.GetRequiredService<ClickAnalyticsChannel>());
+    builder.Services.AddHostedService<ClickAnalyticsBatchProcessor>();
+
     var cachingEnabled = builder.Configuration.GetValue<bool>("Caching:Enabled", true);
     if (cachingEnabled)
     {
@@ -74,12 +78,13 @@ try
     }
 
     app.MapHealthChecks("/health");
-    app.MapGet("/internal/stats", (CacheMetrics metrics) =>
+    app.MapGet("/internal/stats", (CacheMetrics metrics, IClickTracker clickTracker) =>
         Results.Ok(new
         {
             hits = metrics.Hits,
             misses = metrics.Misses,
-            errors = metrics.Errors
+            errors = metrics.Errors,
+            droppedClicks = clickTracker.DroppedClicks
         }));
 
     app.MapLinkEndpoints();

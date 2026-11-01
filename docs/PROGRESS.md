@@ -1,6 +1,6 @@
 # LinklY - Project Progress
 
-## Current Status: Phase A Completed
+## Current Status: Phase B Completed
 
 ### What is Done
 - **Foundation & Core Shortener (.NET 10 Minimal APIs)**:
@@ -22,17 +22,23 @@
   - Observability: `CacheMetrics` counters (`cache_hits`, `cache_misses`, `cache_errors`) exposed at `/internal/stats`.
   - ADR: `0003-redis-cache.md`.
   - Tests: Testcontainers Redis integration tests verifying hits, misses, negative caching, alias cache invalidation, expired link 410, single-flight deduplication, and Redis failure fallback.
+- **Phase B: Async Click Analytics**:
+  - `ClickEvent` entity & EF Core migration (`click_events` table indexed on `(LinkId, ClickedAtUtc)`). Truncated Referrer and UserAgent (max 200 chars). Privacy-preserving: zero raw IP storage.
+  - `ClickAnalyticsChannel` with bounded `Channel<ClickEvent>` (capacity 10,000, `DropOldest`, dropped click counter).
+  - Non-blocking writes directly in `RedirectToLink` without database await on both cache hits and misses.
+  - `ClickAnalyticsBatchProcessor` background worker flushing batches at 500 events or every 2 seconds, with graceful shutdown flush draining.
+  - Endpoint `GET /api/links/{code}/stats` returning `totalClicks` and chronological `clicksPerDay` for the last 30 days.
+  - ADR: `0004-async-click-analytics.md`.
+  - Tests: Batch persistence, stats endpoint calculation and 404 handling, channel overflow dropping oldest and incrementing metric, and graceful shutdown flushing.
 
 ### What is Next
-- **Phase B: Async Click Analytics**:
-  - `ClickEvent` entity and EF Core migration (`click_events` table indexed on `(LinkId, ClickedAtUtc)`).
-  - Bounded `Channel<ClickEvent>` (capacity 10,000, `DropOldest`, dropped click counter).
-  - Non-blocking writes in redirect endpoint.
-  - Background worker flushing batches (500 events or 2s intervals) with graceful shutdown flush.
-  - `GET /api/links/{code}/stats` endpoint (total clicks and 30-day daily breakdown).
-  - ADR 0004 covering async batching, accepted data loss trade-offs, and privacy (no raw IP).
+- **Phase C: Rate Limiting**:
+  - Built-in ASP.NET Core RateLimiter middleware.
+  - `POST /api/links`: 20 req/min per IP (sliding window), 429 ProblemDetails with `Retry-After`.
+  - `GET /{code}`: configurable rate limiting via appsettings.
+  - `ForwardedHeadersOptions` reverse proxy configuration and documentation of IP spoofing risks.
+  - ADR 0005 covering in-memory vs. distributed rate limiter trade-offs.
 
 ### Known Gaps
-- Rate limiting middleware (Phase C).
 - Benchmark harness updates for 80/20 hot set distribution (Phase D).
 - Architecture diagram in main README (Phase D).

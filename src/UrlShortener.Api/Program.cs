@@ -1,3 +1,7 @@
+using System.Threading.RateLimiting;
+using Microsoft.AspNetCore.HttpOverrides;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using Serilog;
 using StackExchange.Redis;
@@ -59,6 +63,81 @@ try
         builder.Services.AddSingleton<ILinkCache, NoOpLinkCache>();
     }
 
+    // Configure Forwarded Headers for reverse proxy environments
+    builder.Services.Configure<ForwardedHeadersOptions>(options =>
+    {
+        options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+        options.KnownIPNetworks.Clear();
+        options.KnownProxies.Clear();
+    });
+
+    // Rate Limiting configuration
+    var redirectRateLimitingEnabled = builder.Configuration.GetValue<bool>("RateLimiting:Redirect:Enabled", false);
+    var redirectPermitLimit = builder.Configuration.GetValue<int>("RateLimiting:Redirect:PermitLimit", 1000);
+    var redirectWindowSeconds = builder.Configuration.GetValue<int>("RateLimiting:Redirect:WindowSeconds", 60);
+
+    builder.Services.AddRateLimiter(options =>
+    {
+        options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+
+        options.OnRejected = async (context, cancellationToken) =>
+        {
+            context.HttpContext.Response.StatusCode = StatusCodes.Status429TooManyRequests;
+            context.HttpContext.Response.ContentType = "application/problem+json";
+
+            if (context.Lease.TryGetMetadata(MetadataName.RetryAfter, out var retryAfter))
+            {
+                var seconds = Math.Max(1, (int)retryAfter.TotalSeconds);
+                context.HttpContext.Response.Headers.RetryAfter = seconds.ToString();
+            }
+            else
+            {
+                context.HttpContext.Response.Headers.RetryAfter = "60";
+            }
+
+            var problem = new ProblemDetails
+            {
+                Status = StatusCodes.Status429TooManyRequests,
+                Title = "Too Many Requests",
+                Detail = "Rate limit exceeded. Please try again later."
+            };
+
+            await context.HttpContext.Response.WriteAsJsonAsync(problem, cancellationToken: cancellationToken);
+        };
+
+        // POST /api/links: 20 req/min per IP (sliding window)
+        options.AddPolicy("CreateLinkPolicy", httpContext =>
+        {
+            var clientIp = httpContext.Connection.RemoteIpAddress?.ToString()
+                ?? httpContext.TraceIdentifier;
+
+            return RateLimitPartition.GetSlidingWindowLimiter(clientIp, _ => new SlidingWindowRateLimiterOptions
+            {
+                PermitLimit = 20,
+                Window = TimeSpan.FromMinutes(1),
+                SegmentsPerWindow = 6,
+                QueueLimit = 0
+            });
+        });
+
+        if (redirectRateLimitingEnabled)
+        {
+            options.AddPolicy("RedirectPolicy", httpContext =>
+            {
+                var clientIp = httpContext.Connection.RemoteIpAddress?.ToString()
+                    ?? httpContext.TraceIdentifier;
+
+                return RateLimitPartition.GetSlidingWindowLimiter(clientIp, _ => new SlidingWindowRateLimiterOptions
+                {
+                    PermitLimit = redirectPermitLimit,
+                    Window = TimeSpan.FromSeconds(redirectWindowSeconds),
+                    SegmentsPerWindow = 6,
+                    QueueLimit = 0
+                });
+            });
+        }
+    });
+
     builder.Services.AddProblemDetails();
 
     builder.Services.AddHealthChecks()
@@ -66,9 +145,11 @@ try
 
     var app = builder.Build();
 
+    app.UseForwardedHeaders();
     app.UseSerilogRequestLogging();
     app.UseExceptionHandler();
     app.UseStatusCodePages();
+    app.UseRateLimiter();
 
     // Migrate database schema on startup
     using (var scope = app.Services.CreateScope())

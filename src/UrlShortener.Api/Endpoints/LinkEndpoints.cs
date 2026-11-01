@@ -19,15 +19,23 @@ public static partial class LinkEndpoints
 
         group.MapPost("/api/links", CreateShortLink)
             .WithName("CreateShortLink")
+            .RequireRateLimiting("CreateLinkPolicy")
             .Produces<ShortLinkResponse>(StatusCodes.Status201Created)
             .ProducesProblem(StatusCodes.Status400BadRequest)
-            .ProducesProblem(StatusCodes.Status409Conflict);
+            .ProducesProblem(StatusCodes.Status409Conflict)
+            .ProducesProblem(StatusCodes.Status429TooManyRequests);
 
-        group.MapGet("/{code}", RedirectToLink)
+        var redirectEndpoint = group.MapGet("/{code}", RedirectToLink)
             .WithName("RedirectToLink")
             .Produces(StatusCodes.Status302Found)
             .ProducesProblem(StatusCodes.Status404NotFound)
             .ProducesProblem(StatusCodes.Status410Gone);
+
+        var config = app.ServiceProvider.GetRequiredService<IConfiguration>();
+        if (config.GetValue<bool>("RateLimiting:Redirect:Enabled", false))
+        {
+            redirectEndpoint.RequireRateLimiting("RedirectPolicy");
+        }
 
         group.MapGet("/api/links/{code}/stats", GetLinkStats)
             .WithName("GetLinkStats")

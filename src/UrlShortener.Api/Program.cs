@@ -31,6 +31,7 @@ try
 
     builder.Services.AddSingleton<IBase62Encoder, Base62Encoder>();
     builder.Services.AddScoped<IShortCodeGenerator, PostgresSequenceShortCodeGenerator>();
+    builder.Services.AddSingleton(TimeProvider.System);
 
     builder.Services.AddProblemDetails();
 

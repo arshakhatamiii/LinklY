@@ -53,6 +53,6 @@ docker run --rm -i \
 
 | Run | Date | Concurrency (VUs) | Duration | Requests/sec | p95 Latency | p99 Latency | Error Rate | Notes |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| **Baseline (No Cache)** | 2026-11-01 | 50 | 30s | *Recorded on run* | *TBD* | *TBD* | 0.00% | Direct PostgreSQL query; no caching |
+| **Baseline (No Cache)** | 2026-11-01 | 50 | 30s | ~5,360 req/s | 13.78 ms | 21.45 ms | 0.00% | Direct PostgreSQL query; 161k requests served |
 | **Future: Memory Cache** | - | 50 | 30s | - | - | - | - | In-Memory IMemoryCache |
 | **Future: Redis Cache** | - | 50 | 30s | - | - | - | - | Distributed Redis cache |

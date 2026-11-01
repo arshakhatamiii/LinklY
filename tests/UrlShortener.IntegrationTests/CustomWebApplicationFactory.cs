@@ -5,6 +5,8 @@ using Testcontainers.PostgreSql;
 using Testcontainers.Redis;
 using Xunit;
 
+[assembly: CollectionBehavior(DisableTestParallelization = true)]
+
 namespace UrlShortener.IntegrationTests;
 
 public class FakeTimeProvider : TimeProvider

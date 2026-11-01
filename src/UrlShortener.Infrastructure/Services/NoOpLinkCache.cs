@@ -9,7 +9,7 @@ public class NoOpLinkCache : ILinkCache
         return Task.FromResult<CachedLink?>(null);
     }
 
-    public Task SetAsync(string code, string url, DateTime? expiresAtUtc, TimeSpan ttl, CancellationToken cancellationToken = default)
+    public Task SetAsync(string code, long id, string url, DateTime? expiresAtUtc, TimeSpan ttl, CancellationToken cancellationToken = default)
     {
         return Task.CompletedTask;
     }

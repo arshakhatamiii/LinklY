@@ -73,7 +73,7 @@ public class RedisLinkCache : ILinkCache
         }
     }
 
-    public async Task SetAsync(string code, string url, DateTime? expiresAtUtc, TimeSpan ttl, CancellationToken cancellationToken = default)
+    public async Task SetAsync(string code, long id, string url, DateTime? expiresAtUtc, TimeSpan ttl, CancellationToken cancellationToken = default)
     {
         if (IsInBackoff() || ttl <= TimeSpan.Zero)
         {
@@ -83,7 +83,7 @@ public class RedisLinkCache : ILinkCache
         try
         {
             var db = _redis.GetDatabase();
-            var cached = new CachedLink(url, expiresAtUtc, IsNotFound: false);
+            var cached = new CachedLink(id, url, expiresAtUtc, IsNotFound: false);
             var json = JsonSerializer.Serialize(cached);
             await db.StringSetAsync(GetKey(code), json, ttl);
         }
@@ -103,7 +103,7 @@ public class RedisLinkCache : ILinkCache
         try
         {
             var db = _redis.GetDatabase();
-            var cached = new CachedLink(null, null, IsNotFound: true);
+            var cached = new CachedLink(0, null, null, IsNotFound: true);
             var json = JsonSerializer.Serialize(cached);
             await db.StringSetAsync(GetKey(code), json, ttl);
         }

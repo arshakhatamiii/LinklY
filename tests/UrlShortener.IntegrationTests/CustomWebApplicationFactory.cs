@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
 using Testcontainers.PostgreSql;
+using Testcontainers.Redis;
 using Xunit;
 
 namespace UrlShortener.IntegrationTests;
@@ -30,16 +31,23 @@ public class CustomWebApplicationFactory : WebApplicationFactory<Program>, IAsyn
         .WithPassword("postgres")
         .Build();
 
+    private readonly RedisContainer _redisContainer = new RedisBuilder("redis:7-alpine")
+        .Build();
+
     public FakeTimeProvider TimeProvider { get; } = new(DateTimeOffset.UtcNow);
+
+    public RedisContainer RedisContainer => _redisContainer;
 
     public async Task InitializeAsync()
     {
-        await _dbContainer.StartAsync();
+        await Task.WhenAll(_dbContainer.StartAsync(), _redisContainer.StartAsync());
     }
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         builder.UseSetting("ConnectionStrings:Database", _dbContainer.GetConnectionString());
+        builder.UseSetting("ConnectionStrings:Redis", _redisContainer.GetConnectionString());
+        builder.UseSetting("Caching:Enabled", "true");
 
         builder.ConfigureServices(services =>
         {
@@ -56,7 +64,6 @@ public class CustomWebApplicationFactory : WebApplicationFactory<Program>, IAsyn
     public new async Task DisposeAsync()
     {
         await base.DisposeAsync();
-        await _dbContainer.StopAsync();
-        await _dbContainer.DisposeAsync();
+        await Task.WhenAll(_dbContainer.DisposeAsync().AsTask(), _redisContainer.DisposeAsync().AsTask());
     }
 }

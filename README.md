@@ -46,6 +46,8 @@ To stop the containers and remove volumes:
 docker compose down -v
 ```
 
+> 📖 **Complete Commands Reference:** For a full cheatsheet covering Docker, cURL requests, EF Core migrations, tests, and load testing commands, see [COMMANDS.md](COMMANDS.md).
+
 ---
 
 ## API Documentation

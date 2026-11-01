@@ -13,6 +13,7 @@ public class ApplicationDbContext : DbContext
     }
 
     public DbSet<ShortLink> ShortLinks => Set<ShortLink>();
+    public DbSet<ClickEvent> ClickEvents => Set<ClickEvent>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -47,6 +48,35 @@ public class ApplicationDbContext : DbContext
 
             builder.Property(x => x.ExpiresAtUtc)
                 .IsRequired(false);
+        });
+
+        modelBuilder.Entity<ClickEvent>(builder =>
+        {
+            builder.ToTable("click_events");
+
+            builder.HasKey(x => x.Id);
+
+            builder.Property(x => x.Id)
+                .UseIdentityByDefaultColumn();
+
+            builder.Property(x => x.LinkId)
+                .IsRequired();
+
+            builder.Property(x => x.ClickedAtUtc)
+                .IsRequired();
+
+            builder.Property(x => x.Referrer)
+                .HasMaxLength(200);
+
+            builder.Property(x => x.UserAgent)
+                .HasMaxLength(200);
+
+            builder.HasIndex(x => new { x.LinkId, x.ClickedAtUtc });
+
+            builder.HasOne<ShortLink>()
+                .WithMany()
+                .HasForeignKey(x => x.LinkId)
+                .OnDelete(DeleteBehavior.Cascade);
         });
     }
 }

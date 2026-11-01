@@ -25,6 +25,35 @@ namespace UrlShortener.Infrastructure.Persistence.Migrations
             modelBuilder.HasSequence("short_link_seq")
                 .StartsAt(1000000L);
 
+            modelBuilder.Entity("UrlShortener.Domain.Entities.ClickEvent", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<DateTime>("ClickedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<long>("LinkId")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("Referrer")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("UserAgent")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("LinkId", "ClickedAtUtc");
+
+                    b.ToTable("click_events", (string)null);
+                });
+
             modelBuilder.Entity("UrlShortener.Domain.Entities.ShortLink", b =>
                 {
                     b.Property<long>("Id")
@@ -52,6 +81,15 @@ namespace UrlShortener.Infrastructure.Persistence.Migrations
                         .IsUnique();
 
                     b.ToTable("short_links", (string)null);
+                });
+
+            modelBuilder.Entity("UrlShortener.Domain.Entities.ClickEvent", b =>
+                {
+                    b.HasOne("UrlShortener.Domain.Entities.ShortLink", null)
+                        .WithMany()
+                        .HasForeignKey("LinkId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
                 });
 #pragma warning restore 612, 618
         }

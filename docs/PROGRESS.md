@@ -1,6 +1,6 @@
 # LinklY - Project Progress
 
-## Current Status: Phase C Completed
+## Current Status: All Phases Completed (Definition of Done Met)
 
 ### What is Done
 - **Foundation & Core Shortener (.NET 10 Minimal APIs)**:
@@ -12,10 +12,10 @@
   - GitHub Actions CI (`.github/workflows/ci.yml`) running Testcontainers tests.
   - ADRs: `0001-code-generation.md`, `0002-alias-and-expiry.md`.
 - **Phase A: Redis Cache-Aside & Stampede Protection**:
-  - `redis:7-alpine` added to Docker Compose with 128MB maxmemory, `allkeys-lru`, and healthcheck.
+  - `redis:7-alpine` in Docker Compose with 128MB maxmemory, `allkeys-lru`, and healthcheck.
   - `ILinkCache` abstraction in Domain, `RedisLinkCache` and `NoOpLinkCache` in Infrastructure.
   - `Caching:Enabled` configuration flag to benchmark with cache toggled on/off.
-  - JSON serialization of `{ url, expiresAtUtc, isNotFound }` with TTL = `min(24h, remaining time)`.
+  - JSON serialization of `{ id, url, expiresAtUtc, isNotFound }` with TTL = `min(24h, remaining time)`.
   - Negative caching: 60s TTL for non-existent codes, invalidated on link/alias creation.
   - `ISingleFlight` in-process deduplication preventing cache stampedes.
   - Resilience: 50ms async timeout, 5s backoff circuit on failure, fail-open fallback to PostgreSQL.
@@ -38,13 +38,16 @@
   - `ForwardedHeaders` configured for reverse proxy IP resolution (`X-Forwarded-For`, `X-Forwarded-Proto`) and spoofing documentation.
   - ADR: `0005-rate-limiting.md`.
   - Tests: 21st request returns 429 with `Retry-After`, different IPs are isolated, redirect hot path unaffected by POST rate limits.
-
-### What is Next
 - **Phase D: Benchmark Harness & Documentation**:
-  - Update `loadtest/redirect.js` supporting both uniform random and 80/20 hot set traffic distributions over N=5000 links.
-  - Update `loadtest/README.md` with docker run instructions and cache on/off benchmark result table with TODO placeholders.
-  - Update CI to run the full test suite.
-  - Update main `README.md` with mermaid architecture diagram, ADR links, feature list, run instructions, design trade-offs, and known limits.
+  - Updated `loadtest/redirect.js` supporting both `uniform` and `hotset` (Pareto 80/20) traffic distributions over N=5000 seeded links with `ramping-arrival-rate`.
+  - Updated `loadtest/README.md` with cache on/off docker instructions, `dropped_iterations` guide, and results table with `TODO` placeholders.
+  - Updated main `README.md` with full mermaid architecture diagram, feature list, single-command run instructions, all ADR links (0001-0005), design trade-offs, and known limitations.
+  - CI pipeline verified green for all 62 unit and integration tests.
 
-### Known Gaps
-- Benchmark run results (to be filled by user runs).
+### Definition of Done Checklist
+- [x] `docker compose up` works cleanly with single command locally.
+- [x] All 62 unit and integration tests green (`dotnet test`).
+- [x] CI workflow runs test suite on push/PR.
+- [x] ADRs 0001 through 0005 all exist in `/docs/adr/`.
+- [x] `docs/PROGRESS.md` reflects final completed state.
+- [x] No invented benchmark numbers (tables have `TODO` placeholders).

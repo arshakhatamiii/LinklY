@@ -123,6 +123,7 @@ public class ClickAnalyticsTests : IClassFixture<CustomWebApplicationFactory>
         {
             channel.TrackClick(ClickEvent.Create(dbLink.Id, DateTime.UtcNow, "https://shutdown.com", "ShutdownAgent"));
         }
+        Assert.Equal(15, channel.Reader.Count);
 
         var processor = new ClickAnalyticsBatchProcessor(
             channel,
@@ -133,6 +134,7 @@ public class ClickAnalyticsTests : IClassFixture<CustomWebApplicationFactory>
         // Start processor and immediately stop it to test graceful shutdown flush
         using var cts = new CancellationTokenSource();
         var processTask = processor.StartAsync(cts.Token);
+        await Task.Delay(50);
         await processor.StopAsync(CancellationToken.None);
         await processTask;
 

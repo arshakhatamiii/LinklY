@@ -1,6 +1,6 @@
 # LinklY - Project Progress
 
-## Current Status: Phase B Completed
+## Current Status: Phase C Completed
 
 ### What is Done
 - **Foundation & Core Shortener (.NET 10 Minimal APIs)**:
@@ -30,15 +30,21 @@
   - Endpoint `GET /api/links/{code}/stats` returning `totalClicks` and chronological `clicksPerDay` for the last 30 days.
   - ADR: `0004-async-click-analytics.md`.
   - Tests: Batch persistence, stats endpoint calculation and 404 handling, channel overflow dropping oldest and incrementing metric, and graceful shutdown flushing.
+- **Phase C: Rate Limiting**:
+  - ASP.NET Core built-in `RateLimiter` middleware (`Microsoft.AspNetCore.RateLimiting`).
+  - `POST /api/links`: Sliding window limiter (20 requests / 1 minute per client IP, 6 segments, queue limit 0).
+  - 429 response handling: Returns RFC 7807 `ProblemDetails` and standard `Retry-After` header.
+  - `GET /{code}`: Unthrottled by default, optionally configurable via `RateLimiting:Redirect:Enabled`.
+  - `ForwardedHeaders` configured for reverse proxy IP resolution (`X-Forwarded-For`, `X-Forwarded-Proto`) and spoofing documentation.
+  - ADR: `0005-rate-limiting.md`.
+  - Tests: 21st request returns 429 with `Retry-After`, different IPs are isolated, redirect hot path unaffected by POST rate limits.
 
 ### What is Next
-- **Phase C: Rate Limiting**:
-  - Built-in ASP.NET Core RateLimiter middleware.
-  - `POST /api/links`: 20 req/min per IP (sliding window), 429 ProblemDetails with `Retry-After`.
-  - `GET /{code}`: configurable rate limiting via appsettings.
-  - `ForwardedHeadersOptions` reverse proxy configuration and documentation of IP spoofing risks.
-  - ADR 0005 covering in-memory vs. distributed rate limiter trade-offs.
+- **Phase D: Benchmark Harness & Documentation**:
+  - Update `loadtest/redirect.js` supporting both uniform random and 80/20 hot set traffic distributions over N=5000 links.
+  - Update `loadtest/README.md` with docker run instructions and cache on/off benchmark result table with TODO placeholders.
+  - Update CI to run the full test suite.
+  - Update main `README.md` with mermaid architecture diagram, ADR links, feature list, run instructions, design trade-offs, and known limits.
 
 ### Known Gaps
-- Benchmark harness updates for 80/20 hot set distribution (Phase D).
-- Architecture diagram in main README (Phase D).
+- Benchmark run results (to be filled by user runs).

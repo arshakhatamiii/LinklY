@@ -33,7 +33,7 @@ public class ApplicationDbContext : DbContext
 
             builder.Property(x => x.Code)
                 .IsRequired()
-                .HasMaxLength(16);
+                .HasMaxLength(30);
 
             builder.HasIndex(x => x.Code)
                 .IsUnique();
@@ -44,6 +44,9 @@ public class ApplicationDbContext : DbContext
 
             builder.Property(x => x.CreatedAtUtc)
                 .IsRequired();
+
+            builder.Property(x => x.ExpiresAtUtc)
+                .IsRequired(false);
         });
     }
 }

@@ -1,9 +1,26 @@
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.Extensions.DependencyInjection;
 using Testcontainers.PostgreSql;
 using Xunit;
 
 namespace UrlShortener.IntegrationTests;
+
+public class FakeTimeProvider : TimeProvider
+{
+    private DateTimeOffset _utcNow;
+
+    public FakeTimeProvider(DateTimeOffset initialUtcNow)
+    {
+        _utcNow = initialUtcNow;
+    }
+
+    public override DateTimeOffset GetUtcNow() => _utcNow;
+
+    public void Advance(TimeSpan timeSpan) => _utcNow = _utcNow.Add(timeSpan);
+
+    public void SetUtcNow(DateTimeOffset utcNow) => _utcNow = utcNow;
+}
 
 public class CustomWebApplicationFactory : WebApplicationFactory<Program>, IAsyncLifetime
 {
@@ -13,6 +30,8 @@ public class CustomWebApplicationFactory : WebApplicationFactory<Program>, IAsyn
         .WithPassword("postgres")
         .Build();
 
+    public FakeTimeProvider TimeProvider { get; } = new(DateTimeOffset.UtcNow);
+
     public async Task InitializeAsync()
     {
         await _dbContainer.StartAsync();
@@ -21,6 +40,17 @@ public class CustomWebApplicationFactory : WebApplicationFactory<Program>, IAsyn
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         builder.UseSetting("ConnectionStrings:Database", _dbContainer.GetConnectionString());
+
+        builder.ConfigureServices(services =>
+        {
+            var descriptor = services.FirstOrDefault(d => d.ServiceType == typeof(TimeProvider));
+            if (descriptor is not null)
+            {
+                services.Remove(descriptor);
+            }
+
+            services.AddSingleton<TimeProvider>(TimeProvider);
+        });
     }
 
     public new async Task DisposeAsync()

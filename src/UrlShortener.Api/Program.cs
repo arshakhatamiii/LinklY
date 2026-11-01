@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Serilog;
+using StackExchange.Redis;
 using UrlShortener.Api.Endpoints;
 using UrlShortener.Domain.Common;
 using UrlShortener.Domain.Services;
@@ -8,7 +9,7 @@ using UrlShortener.Infrastructure.Services;
 
 Log.Logger = new LoggerConfiguration()
     .WriteTo.Console()
-    .CreateBootstrapLogger();
+    .CreateLogger();
 
 try
 {
@@ -33,6 +34,27 @@ try
     builder.Services.AddScoped<IShortCodeGenerator, PostgresSequenceShortCodeGenerator>();
     builder.Services.AddSingleton(TimeProvider.System);
 
+    builder.Services.AddSingleton<CacheMetrics>();
+    builder.Services.AddSingleton<ISingleFlight, SingleFlight>();
+
+    var cachingEnabled = builder.Configuration.GetValue<bool>("Caching:Enabled", true);
+    if (cachingEnabled)
+    {
+        var redisConnectionString = builder.Configuration.GetConnectionString("Redis") ?? "localhost:6379";
+        var redisOptions = ConfigurationOptions.Parse(redisConnectionString);
+        redisOptions.AsyncTimeout = 50;
+        redisOptions.SyncTimeout = 50;
+        redisOptions.ConnectTimeout = 1000;
+        redisOptions.AbortOnConnectFail = false;
+
+        builder.Services.AddSingleton<IConnectionMultiplexer>(_ => ConnectionMultiplexer.Connect(redisOptions));
+        builder.Services.AddSingleton<ILinkCache, RedisLinkCache>();
+    }
+    else
+    {
+        builder.Services.AddSingleton<ILinkCache, NoOpLinkCache>();
+    }
+
     builder.Services.AddProblemDetails();
 
     builder.Services.AddHealthChecks()
@@ -52,6 +74,14 @@ try
     }
 
     app.MapHealthChecks("/health");
+    app.MapGet("/internal/stats", (CacheMetrics metrics) =>
+        Results.Ok(new
+        {
+            hits = metrics.Hits,
+            misses = metrics.Misses,
+            errors = metrics.Errors
+        }));
+
     app.MapLinkEndpoints();
 
     await app.RunAsync();

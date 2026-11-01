@@ -37,6 +37,7 @@ public static partial class LinkEndpoints
         HttpContext httpContext,
         ApplicationDbContext dbContext,
         IShortCodeGenerator codeGenerator,
+        ILinkCache linkCache,
         IConfiguration configuration,
         TimeProvider timeProvider,
         CancellationToken cancellationToken)
@@ -138,6 +139,8 @@ public static partial class LinkEndpoints
                 detail: $"The alias '{code}' is already in use.");
         }
 
+        await linkCache.RemoveAsync(code, cancellationToken);
+
         var baseUrl = $"{httpContext.Request.Scheme}://{httpContext.Request.Host}";
         var shortUrl = $"{baseUrl}/{code}";
 
@@ -154,6 +157,8 @@ public static partial class LinkEndpoints
     public static async Task<IResult> RedirectToLink(
         string code,
         ApplicationDbContext dbContext,
+        ILinkCache linkCache,
+        ISingleFlight singleFlight,
         TimeProvider timeProvider,
         CancellationToken cancellationToken)
     {
@@ -165,11 +170,61 @@ public static partial class LinkEndpoints
                 detail: $"Short link with code '{code}' was not found.");
         }
 
-        var shortLink = await dbContext.ShortLinks
-            .AsNoTracking()
-            .FirstOrDefaultAsync(x => x.Code == code, cancellationToken);
+        var cached = await linkCache.GetAsync(code, cancellationToken);
+        if (cached is not null)
+        {
+            if (cached.IsNotFound)
+            {
+                return Results.Problem(
+                    statusCode: StatusCodes.Status404NotFound,
+                    title: "Link not found",
+                    detail: $"Short link with code '{code}' was not found.");
+            }
 
-        if (shortLink is null)
+            var now = timeProvider.GetUtcNow().UtcDateTime;
+            if (cached.ExpiresAtUtc.HasValue && cached.ExpiresAtUtc.Value <= now)
+            {
+                return Results.Problem(
+                    statusCode: StatusCodes.Status410Gone,
+                    title: "Link expired",
+                    detail: $"Short link with code '{code}' has expired.");
+            }
+
+            return Results.Redirect(cached.Url!, permanent: false);
+        }
+
+        var entry = await singleFlight.ExecuteAsync(code, async () =>
+        {
+            var shortLink = await dbContext.ShortLinks
+                .AsNoTracking()
+                .FirstOrDefaultAsync(x => x.Code == code, cancellationToken);
+
+            if (shortLink is null)
+            {
+                await linkCache.SetNegativeAsync(code, TimeSpan.FromSeconds(60), cancellationToken);
+                return new CachedLink(null, null, IsNotFound: true);
+            }
+
+            var nowUtc = timeProvider.GetUtcNow().UtcDateTime;
+            TimeSpan ttl = TimeSpan.FromHours(24);
+            if (shortLink.ExpiresAtUtc.HasValue)
+            {
+                var remaining = shortLink.ExpiresAtUtc.Value - nowUtc;
+                if (remaining < ttl)
+                {
+                    ttl = remaining;
+                }
+            }
+
+            if (!shortLink.ExpiresAtUtc.HasValue || shortLink.ExpiresAtUtc.Value > nowUtc)
+            {
+                await linkCache.SetAsync(shortLink.Code, shortLink.OriginalUrl, shortLink.ExpiresAtUtc, ttl, cancellationToken);
+            }
+
+            return new CachedLink(shortLink.OriginalUrl, shortLink.ExpiresAtUtc, IsNotFound: false);
+        });
+
+        if (entry.IsNotFound)
         {
             return Results.Problem(
                 statusCode: StatusCodes.Status404NotFound,
@@ -177,8 +232,8 @@ public static partial class LinkEndpoints
                 detail: $"Short link with code '{code}' was not found.");
         }
 
-        var nowUtc = timeProvider.GetUtcNow().UtcDateTime;
-        if (shortLink.ExpiresAtUtc.HasValue && shortLink.ExpiresAtUtc.Value <= nowUtc)
+        var nowUtcCheck = timeProvider.GetUtcNow().UtcDateTime;
+        if (entry.ExpiresAtUtc.HasValue && entry.ExpiresAtUtc.Value <= nowUtcCheck)
         {
             return Results.Problem(
                 statusCode: StatusCodes.Status410Gone,
@@ -186,7 +241,7 @@ public static partial class LinkEndpoints
                 detail: $"Short link with code '{code}' has expired.");
         }
 
-        return Results.Redirect(shortLink.OriginalUrl, permanent: false);
+        return Results.Redirect(entry.Url!, permanent: false);
     }
 }
 
